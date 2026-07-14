@@ -29,6 +29,6 @@ export function isValidKilocodeToken(token: string): boolean {
 /**
  * Get API key from options or environment
  */
-export function getApiKey(options: { kilocodeToken?: string; apiKey?: string }): string | undefined {
-  return options.kilocodeToken ?? options.apiKey
+export function getApiKey(options: { kilocodeToken?: string; apiKey?: string; puterToken?: string }): string | undefined {
+  return options.kilocodeToken ?? options.apiKey ?? options.puterToken
 }

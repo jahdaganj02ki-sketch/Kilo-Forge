@@ -2,12 +2,14 @@
 // Plugin
 // ============================================================================
 export { KiloAuthPlugin, default } from "./plugin.js"
+export { PuterAuthPlugin } from "./puter-auth.js"
 
 // ============================================================================
 // Provider
 // ============================================================================
 export { createKilo } from "./provider.js"
 export { createKiloDebug } from "./provider-debug.js"
+export { createPuter, PUTER_DEFAULT_MODELS } from "./puter-provider.js"
 export { kiloCustomLoader } from "./loader.js"
 export { buildKiloHeaders, getEditorNameHeader, getFeatureHeader, getDefaultHeaders, getUserAgent } from "./headers.js"
 

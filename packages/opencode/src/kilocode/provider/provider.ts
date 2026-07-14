@@ -6,7 +6,7 @@
 // This module exports patch functions and data that the upstream provider.ts
 // calls at well-defined injection points (each marked with kilocode_change).
 
-import { createKilo, type KiloProvider, AI_SDK_PROVIDERS, PROMPTS } from "@kilocode/kilo-gateway"
+import { createKilo, createPuter, type KiloProvider, AI_SDK_PROVIDERS, PROMPTS } from "@kilocode/kilo-gateway"
 import { DEFAULT_HEADERS } from "@/kilocode/const"
 import { ProviderV2 } from "@opencode-ai/core/provider"
 import { ModelV2 } from "@opencode-ai/core/model"
@@ -26,6 +26,7 @@ type BundledSDK = { languageModel(modelId: string): LanguageModelV3 }
 
 export const KILO_BUNDLED_PROVIDERS: Record<string, () => Promise<(options: any) => BundledSDK>> = {
   "@kilocode/kilo-gateway": async () => createKilo as unknown as (options: any) => BundledSDK,
+  "@kilocode/puter-provider": async () => createPuter as unknown as (options: any) => BundledSDK, // kilocode_change - Puter.js provider
 }
 
 // ---------------------------------------------------------------------------
@@ -174,6 +175,7 @@ export function kiloCustomLoaders(dep: CustomDep): Record<string, CustomLoader> 
           if (provider === "mistral") return sdk.mistral(modelID)
           if (provider === "openai") return sdk.openai(modelID)
           if (provider === "openai-compatible") return sdk.openaiCompatible(modelID)
+          if (provider === "puter") return sdk.puter(modelID)
           return sdk.languageModel(modelID)
         },
       }
@@ -185,6 +187,62 @@ export function kiloCustomLoaders(dep: CustomDep): Record<string, CustomLoader> 
         autoload: false,
         options: { headers: DEFAULT_HEADERS },
       }),
+
+    // kilocode_change start - Puter.js provider custom loader
+    puter: Effect.fnUntraced(function* (input: any) {
+      const env = yield* dep.env()
+      const config = yield* dep.config()
+      const hasKey = yield* Effect.gen(function* () {
+        if (input.env.some((item: string) => env[item])) return true
+        if (yield* dep.auth(input.id)) return true
+        if (config.provider?.["puter"]?.options?.apiKey) return true
+        if (config.provider?.["puter"]?.options?.puterToken) return true
+        return false
+      })
+
+      const options: Record<string, any> = {}
+      if (!hasKey) {
+        options.apiKey = "anonymous"
+      }
+
+      // Discover Puter models from the hardcoded catalog
+      const discoverModels = async (): Promise<Record<string, any>> => {
+        const { PUTER_DEFAULT_MODELS } = yield* Effect.promise(() => import("@kilocode/kilo-gateway"))
+        const models: Record<string, any> = {}
+        for (const model of PUTER_DEFAULT_MODELS) {
+          models[model.id] = {
+            id: model.id,
+            name: model.name,
+            family: model.provider,
+            release_date: new Date().toISOString().split("T")[0],
+            attachment: false,
+            reasoning: false,
+            temperature: true,
+            tool_call: true,
+            cost: { input: 0, output: 0 },
+            limit: { context: 128000, output: 4096 },
+            modalities: { input: ["text"], output: ["text"] },
+            options: {},
+            headers: {},
+            provider: {
+              npm: "@kilocode/puter-provider",
+            },
+            ai_sdk_provider: "puter",
+          }
+        }
+        return models
+      }
+
+      return {
+        autoload: Object.keys(input.models).length > 0 || hasKey,
+        options,
+        discoverModels,
+        async getModel(sdk: any, modelID: string) {
+          return sdk.puter(modelID)
+        },
+      }
+    }),
+    // kilocode_change end
   }
 }
 
@@ -230,6 +288,15 @@ export function patchCustomLoaderResult(
       }
       break
     }
+    // kilocode_change start - Puter.js provider headers
+    case "puter":
+      result.options.headers = {
+        ...result.options.headers,
+        "HTTP-Referer": "https://kilo.ai/",
+        "X-Title": "Kilo Code",
+      }
+      break
+    // kilocode_change end
     // gitlab User-Agent and cloudflare error message are patched inline
     // in provider.ts with single-line kilocode_change markers
   }

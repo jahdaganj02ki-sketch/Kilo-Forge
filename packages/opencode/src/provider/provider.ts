@@ -147,6 +147,7 @@ const BUNDLED_PROVIDERS: Record<string, () => Promise<(opts: any) => BundledSDK>
     import("@opencode-ai/core/github-copilot/copilot-provider").then((m) => m.createOpenaiCompatible),
   "venice-ai-sdk-provider": () => import("venice-ai-sdk-provider").then((m) => m.createVenice),
   ...KILO_BUNDLED_PROVIDERS, // kilocode_change
+  "@kilocode/puter-provider": () => import("@kilocode/kilo-gateway").then((m) => m.createPuter), // kilocode_change - Puter.js provider
 }
 
 type CustomModelLoader = (sdk: any, modelID: string, options?: Record<string, any>, model?: Model) => Promise<any>
@@ -479,6 +480,28 @@ function custom(dep: CustomDep): Record<string, CustomLoader> {
           },
         },
       }),
+    // kilocode_change start - Puter.js provider
+    puter: Effect.fnUntraced(function* (provider: Info) {
+      const env = yield* dep.env()
+      const auth = yield* dep.auth("puter")
+      const hasKey = iife(() => {
+        if (provider.options?.apiKey) return true
+        if (provider.options?.puterToken) return true
+        if (auth?.type === "api") return true
+        return false
+      })
+
+      return {
+        autoload: hasKey,
+        options: {
+          ...(hasKey ? {} : { apiKey: "anonymous" }),
+        },
+        async getModel(sdk: any, modelID: string) {
+          return sdk.puter(modelID)
+        },
+      }
+    }),
+    // kilocode_change end
     nvidia: (provider) =>
       Effect.succeed({
         autoload: provider.source === "config",

@@ -107,4 +107,5 @@ export const AI_SDK_PROVIDERS = [
   "openai",
   "openai-compatible",
   "openrouter",
+  "puter",
 ] as const

@@ -113,7 +113,7 @@ export const layer: Layer.Layer<
     })
 
     const authOptions = Effect.fn("ModelCache.authOptions")(function* (providerID: string) {
-      if (providerID !== "kilo" && providerID !== "apertis") return {}
+      if (providerID !== "kilo" && providerID !== "apertis" && providerID !== "puter") return {}
       const config = yield* cfg.get()
       const options: Options = {}
 
@@ -154,12 +154,56 @@ export const layer: Layer.Layer<
         })
       }
 
+      // kilocode_change start - Puter.js provider auth options
+      if (providerID === "puter") {
+        const item = config.provider?.[providerID]
+        if (item?.options?.apiKey) options.puterToken = item.options.apiKey
+        if (item?.options?.puterToken) options.puterToken = item.options.puterToken
+
+        const info = yield* auth.get(providerID)
+        if (info?.type === "api") options.puterToken = info.key
+        if (process.env.PUTER_TOKEN) options.puterToken = process.env.PUTER_TOKEN
+        log.debug("puter auth options resolved", {
+          providerID,
+          hasToken: !!options.puterToken,
+        })
+      }
+      // kilocode_change end
+
       return options
     })
 
     const fetchModels = (providerID: string, options: Options): Effect.Effect<Result, unknown> => {
       if (providerID === "kilo") return kilo.fetch(options)
       if (providerID === "apertis") return fetchApertisModels(options).pipe(Effect.map((models) => ({ models })))
+      // kilocode_change start - Puter.js provider model fetch
+      if (providerID === "puter") {
+        const { PUTER_DEFAULT_MODELS } = yield* Effect.promise(() => import("@kilocode/kilo-gateway"))
+        const models: Record<string, any> = {}
+        for (const model of PUTER_DEFAULT_MODELS) {
+          models[model.id] = {
+            id: model.id,
+            name: model.name,
+            family: model.provider,
+            release_date: new Date().toISOString().split("T")[0],
+            attachment: false,
+            reasoning: false,
+            temperature: true,
+            tool_call: true,
+            cost: { input: 0, output: 0 },
+            limit: { context: 128000, output: 4096 },
+            modalities: { input: ["text"], output: ["text"] },
+            options: {},
+            headers: {},
+            provider: {
+              npm: "@kilocode/puter-provider",
+            },
+            ai_sdk_provider: "puter",
+          }
+        }
+        return Effect.succeed({ models })
+      }
+      // kilocode_change end
       log.debug("provider not implemented", { providerID })
       return Effect.succeed({ models: {} })
     }
@@ -181,6 +225,9 @@ export const layer: Layer.Layer<
         return JSON.stringify([providerID, options?.baseURL, options?.kilocodeOrganizationId, options?.kilocodeToken])
       }
       if (providerID === "apertis") return JSON.stringify([providerID, options?.baseURL, options?.apiKey])
+      // kilocode_change start - Puter.js provider cache key
+      if (providerID === "puter") return JSON.stringify([providerID, options?.puterToken])
+      // kilocode_change end
       return providerID
     }
 
